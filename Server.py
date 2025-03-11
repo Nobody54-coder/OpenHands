@@ -1,31 +1,26 @@
-from fastapi import FastAPI, Request
-from fastapi.staticfiles import StaticFiles
-import uvicorn
-import asyncio
-import main  # This imports your CLI tool logic from main.py
+from flask import Flask, request, jsonify
+import subprocess  # If OpenDevin is using command-line execution
 
-app = FastAPI()
+app = Flask(__name__)
 
-# Mount the 'frontend' directory to serve static files (the GUI)
-app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
-
-@app.get("/api")
-def home():
-    return {"message": "Welcome to the Web Version of the AI Tool!"}
-
-@app.post("/api/run")
-async def run_tool(request: Request):
-    data = await request.json()
+@app.route('/api/run', methods=['POST'])
+def run_command():
+    data = request.get_json()
     user_input = data.get("input", "")
 
-    # Call your existing tool's logic. 
-    # Here, we assume run_controller is an async function in main.py that processes the task.
-    result = await main.run_controller(
-        config=main.AppConfig(),  # Create a default configuration
-        initial_user_action=main.MessageAction(content=user_input)
-    )
+    if not user_input:
+        return jsonify({"result": "Error: No input provided"}), 400
 
-    return {"result": str(result)}
+    try:
+        # Run OpenDevin's command-line tool
+        result = subprocess.run(
+            ["opendevin-cli", user_input],  # Replace with the actual CLI command
+            text=True,
+            capture_output=True
+        )
+        return jsonify({"result": result.stdout.strip()})
+    except Exception as e:
+        return jsonify({"result": f"Error: {str(e)}"}), 500
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5000)
